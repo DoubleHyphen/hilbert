@@ -3,10 +3,10 @@
 //! and the total number of bits required to represent each coordinate is controlled by the construction process.
 //! 
 //! For the most convenient means of constructing many `Points`, see the `point_list` module.
-use std::hash::{Hash, Hasher};
-use num::BigUint;
+//use num::BigUint;
 use super::transform::fast_hilbert;
 use super::permutation::Permutation;
+#![cfg_attr(not(feature = "std"), no_std)]
 
 /// An immutable, N-dimensional point with unsigned integer coordinates and an optimized distance function.
 /// 
@@ -50,27 +50,87 @@ use super::permutation::Permutation;
 ///         //  highest coordinate value.
 ///         Point::hilbert_sort(&mut points, 11);
 /// ```
-#[derive(Debug, Clone)]
-pub struct Point {
-    /// Presumably unique id.
-    id : usize,
-
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+pub struct Point<Coordinate, const N: usize> {
     /// Coordinate values for point.
-    coordinates : Vec<u32>,
-
-    /// Square of the distance from the origin to the `Point`.
-    square_magnitude : u64
+    coordinates : [Coordinate; N],
 }
 
-impl Point {
+
+
+use core::ops::{Add, Sub, Mul, AddAssign, SubAssign};
+impl Add for Point {
+    type Output = Self;
+    
+    fn add(self, other: Self) -> Self {
+        let mut result = [0; N];
+        self.coordinates.iter().zip(other.coordinates.iter()).enumerate().for_each(
+            |(i, (a, b)|
+                result[i] = a + b;
+        )
+        result
+    }
+}
+
+impl Sub for Vec3d {
+    type Output = Self;
+    
+    fn sub(self, other: Self) -> Self {
+        Self{x:self.x - other.x, y: self.y - other.y, z:self.z - other.z}
+    }
+}
+
+impl Mul<Vec3d> for Vec3d {
+    type Output = Coordinate;
+    
+    fn mul(self, other: Self) -> Coordinate {
+        self.x*other.x + self.y*other.y + self.z*other.z
+    }
+}
+
+impl Mul<Coordinate> for Vec3d {
+    type Output = Self;
+    
+    fn mul(self, factor: Coordinate) -> Self {
+        Self{x: self.x*factor, y: self.y*factor, z: self.z*factor}
+    }
+}
+
+impl AddAssign for Vec3d {
+    fn add_assign(&mut self, other: Self) {
+        *self = Self {
+            x: self.x + other.x,
+            y: self.y + other.y,
+            z: self.z + other.z,
+        };
+    }
+}
+
+impl SubAssign for Vec3d {
+    fn sub_assign(&mut self, other: Self) {
+        *self = Self {
+            x: self.x - other.x,
+            y: self.y - other.y,
+            z: self.z - other.z,
+        };
+    }
+}
+
+impl Vec3d {
+    fn squared_norm (self) -> Coordinate {self * self}
+    fn norm(self) -> Coordinate {self.squared_norm().sqrt()}
+    fn cubed_norm(self) -> Coordinate {let tmp = self.squared_norm(); tmp * tmp.sqrt()}
+    fn distance(self, other: Vec3d) -> Coordinate {(self - other).norm()}
+//     fn distance_cub(self, other: Vec3d) -> Coordinate {(self - other).norm() * (self - other).squared_norm()}
+}
+
+impl Point<Coordinate, const N: usize> {
     /// Construct a new Point with the given id. 
     /// 
     /// Note: It is the caller's duty to ensure that ids remain unique. 
-    pub fn new(id : usize, coords : &[u32]) -> Point {
+    pub fn new(&[Coordinate]) -> Point {
         Point {
-            id, 
             coordinates : coords.iter().map(|c| c.clone()).collect(), 
-            square_magnitude : coords.iter().fold(0_u64, |sum,coord| sum + (coord.clone() as u64) * (coord.clone() as u64))
         }
     }
 
@@ -82,11 +142,8 @@ impl Point {
 
     /// Number of dimensions for the Point. 
     pub fn dimensions(&self) -> usize { 
-        self.coordinates.len() 
+        N
     }
-
-    /// Gets the `id` for the Point. 
-    pub fn get_id(&self) -> usize { self.id }
 
     /// Gets the coordinate values for the point.
     pub fn get_coordinates(&self) -> &Vec<u32> { &self.coordinates }
@@ -212,19 +269,14 @@ impl Point {
     }
 }
 
+#[cfg(feature = "std")]
 impl Hash for Point {
+use std::hash::{Hash, Hasher};
     /// To remain consistent with equals, this incorporates the `id` and `square_magnitude` into the hash. 
     fn hash<H: Hasher>(&self, state: &mut H) { 
         self.id.hash(state); 
         self.square_magnitude.hash(state);
     }
-}
-
-impl PartialEq for Point {
-    /// Define equality to only compare the id and square_magnitude, for speed.
-    /// 
-    /// Note: To compare all the coordinate values, use `are_coordinates_identical` instead.
-    fn eq(&self, other: &Self) -> bool { self.id == other.id && self.square_magnitude == other.square_magnitude }
 }
 
 #[cfg(test)]
